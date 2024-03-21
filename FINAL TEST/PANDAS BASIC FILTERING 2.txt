@@ -1,0 +1,22 @@
+import pandas as pd
+
+delivery_method = str(input('Waiting for input: '))  #example: scoop_1
+
+df = pd.read_csv("icecream.csv")
+
+### ADD YOUR CODE BELOW
+
+df['topping'] = df['topping'].replace({'choc-chips': 'chocchips'})
+
+df_filtered = df[(df['delivery'] == delivery_method) &                          
+                 (df['topping'] == 'chocchips')]
+
+youngest_age = df_filtered['age'].min()
+oldest_age = df_filtered['age'].max()
+
+# youngest_age = 999
+# oldest_age = 999
+
+### ADD YOUR CODE ABOVE
+
+print(f"Youngest: {youngest_age}, oldest: {oldest_age}")

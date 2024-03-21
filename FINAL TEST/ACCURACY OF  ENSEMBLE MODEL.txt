@@ -1,0 +1,11 @@
+### ADD YOUR CODE BELOW
+
+rate = 0.9
+error = 0.10
+P_incorrect = 3*(pow(0.10,2))*(pow(0.90,1))+1*(pow(0.10,3))*(pow(0.90,0))
+
+accuracy = 1- P_incorrect
+
+### ADD YOUR CODE ABOVE
+
+print(f"accuracy rate of the ensemble model is {accuracy:.2f}")

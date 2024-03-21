@@ -1,0 +1,46 @@
+n = int(float(input('Waiting for input: ')))  # example: 12
+
+
+def is_prime(n):
+    for i in range(2, int(n**0.5)+1):
+        if n % i == 0:
+            return False
+    return True
+    
+    
+def PND(n):
+    
+    # initialise prime list to an empty list
+    prime_lst = []
+            
+    ### ADD YOUR CODE BELOW
+    
+    # initialise product to n
+    product = n    
+
+    # while product is a composite number
+    while is_prime(product)==0:
+        
+        # search for next prime divisor
+        for i in range(2, product):
+            
+            # only evaluate primes
+            if is_prime(i):
+                
+                # if number is prime and a divisor, update product and list
+                if product % i == 0:
+                    prime_lst.append(i)
+                    product = int(product/i)
+                    break
+
+    # add final prime to list or if already prime
+    prime_lst.append(product)
+
+    prime_lst = sorted(prime_lst)
+
+    ### ADD YOUR CODE ABOVE
+
+    return prime_lst
+
+
+print(f'The prime number decomposition of {n} is {PND(n)}.')

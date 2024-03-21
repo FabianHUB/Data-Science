@@ -1,0 +1,31 @@
+import numpy as np
+
+
+num_yes = int(float(input('Waiting for input: ')))  # Example: 70
+num_no  = int(float(input('Waiting for input: ')))  # Example: 30
+
+
+def calculate_entropy(num_yes, num_no):
+    
+    ### ADD YOUR CODE BELOW
+    total = num_yes + num_no
+    p_yes = num_yes/total
+    p_no = num_no/total
+    e_yes = p_yes*np.log2(p_yes)
+    e_no = p_no*np.log2(p_no)
+    entropy =-1*(e_yes+e_no) 
+    
+    ### ADD YOUR CODE ABOVE
+    
+    return entropy
+
+
+# Calculate the entropy for the given problem
+entropy = calculate_entropy(num_yes, num_no)
+
+print(f'Entropy of the target variable is {entropy:.2f}')
+
+*************************
+UNIT TEST RESULTS:
+*************************
+Test 1: Passed! (Successful Test Output: Entropy of the target variable is 0.88)
