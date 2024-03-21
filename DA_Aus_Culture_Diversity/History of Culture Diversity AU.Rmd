@@ -1,0 +1,160 @@
+---
+title: 'Draft : History of Culture Diversity AU'
+author: "Fabian Caballero"
+date: "11/05/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(tidyr)
+library(lubridate)
+library(stringr)
+library(rgeos)
+library(maptools)
+library(ggmap)
+library(broom) # tidy() 
+library(maps)
+library(mapproj)
+library(scales)
+library(rgdal)
+
+setwd("C:/Users/Fcaba/Documents/RMIT/2022-1/VISUALIZATION AND COMUNICATION/ASSIGNMENTS/FINAL")
+```
+
+## Objective
+
+Australia has important combination of culture from countries around the world that it ranks Australia as one of the countries with more diversity heritage. This is because, history has shown this country is a potential country for migrants. For instance, ancestry of the current Australian citizens came to country from the 5 continents. Additionally, Australia is becoming either temporary or permanent, the home for many international students, refugees, international investors and migrators contribuiting with the diversity of culture in the country. As a result, Australian generations are currently divided by 3 categories depending of their parents country of birth. The following visualisation will provide information about the culture heritage of Australia based on the diversity of their national and international citizen. 
+
+No Further Details - NFD
+Not Elsewhere Classified - NEC
+
+## Australian Ancestry Global Map
+Initially, the data is extracted from a arranged datacube from the ABS[Referencing]. Because the extracted data is presented as informative table, it is neccessary to preprocess it in two steps :
+Firstly, a manual manipulation is neccesary to treat data properly in R. This is because, the structure does not fit for the treatments required on R and some variables irregular names that most be fixed to create the visualisation. For example, the name of some of the countries do not match with the country names in the spatial data and as a result, it may produce errors at the moment to plot the map. 
+Pre processing table 1 from the cubedata of the Census, initially, the data was tidied on excel to effeciently correct the global data structure of the arranged data
+```{r plot1(table 5)}
+#
+library(RColorBrewer)
+world_shape <- readOGR("Countries/ne_10m_admin_0_map_units.shp")
+
+
+
+ancestry_data_australia <- read.csv("Table_5.csv")
+ancestry_data_australia$Population <- as.numeric(ancestry_data_australia$Population)
+#Transform sp. to data frame
+world_shape_frame <- tidy(world_shape,region = "ADM0_A3")
+
+#Tidy to merge
+ancestry_data_australia <- ancestry_data_australia%>%mutate(id = ISO,
+                                                            Pop_range = factor(Pop_range,levels = c("<1000",">=1000 and < 100000", ">=100000 and <500000", ">=500000 < 1000000", "> 1000000"),ordered = TRUE))
+
+
+ancestry_data_australia$Pop_range <- ifelse(ancestry_data_australia$Population>=1000 & ancestry_data_australia$Population<=100000,yes = ">=1000 and < 100000",no = ifelse(ancestry_data_australia$Population>=100000 & ancestry_data_australia$Population<500000,yes = ">=100000 and <500000", no = ifelse(ancestry_data_australia$Population>=500000 & ancestry_data_australia$Population<1000000,yes = ">=500000 < 1000000",no = ifelse(ancestry_data_australia$Population>=1000000,yes = "> 1000000",no = ifelse(ancestry_data_australia$Population<1000,yes = "<1000",no = 0)))))
+
+#Merge data
+merge_data <- left_join(world_shape_frame, ancestry_data_australia, by ="id")
+merge_data_ordered<-merge_data[order(merge_data$order), ] 
+
+
+#plot map
+
+pal <- c('#ffffcc','#a1dab4','#41b6c4','#2c7fb8','#253494')
+
+
+p1 <- ggplot(data = merge_data_ordered,
+             aes(x = long, y = lat, group = group, fill = Pop_range))
+p2 <- p1 + geom_polygon(color = "black", size = 0.25) + 
+  coord_map() +
+  ggtitle("Choropleth map of Australia Ancestry Diversity") +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank())+
+  scale_fill_manual(values = pal)
+        # legend.title = element_blank(),
+        # legend.key = element_blank(),
+        # legend.background = element_blank(),
+        # legend.text = element_blank(),
+        # legend.box.background = element_blank(),
+        # legend.position = "none")
+
+
+p2
+```
+
+## Australian age by gender by generation 
+
+```{r plot2 table 4, echo=FALSE}
+# PLOT BAR CHARTS
+data1 <- read.csv("Table_4.csv")
+head(data1)
+
+data2 <- data1[,0:4]
+
+longer_data2 <- pivot_longer(data2, names_to = "Gender", c("Male","Female"), values_to = "Population")
+head(longer_data2)
+
+longer_data2$Age.Range <- factor(longer_data2$Age.Range, ordered = TRUE)
+
+
+longer_data2$Population <- as.numeric(longer_data2$Population)
+p <- ggplot(longer_data2,aes(x = Age.Range, y = Population,fill = Gender))
+p1 <- p + geom_bar(data = filter(longer_data2, Gender == "Female"),
+                   stat = "identity") +
+  geom_bar(data = filter(longer_data2, Gender == "Male"), aes(y = Population*(-1)),stat = "identity") + 
+  scale_y_continuous(breaks = seq(-1000000,1000000,100000),
+                     limits = c(-1000000,1000000),
+                     labels = paste0(as.character(abs(seq(-10, 10,1))))) +
+  coord_flip() +
+  labs(x = "Age Category", y = "Population (Hundred Thousand)") +
+  scale_fill_manual(values = c("#FFE599","#2c7bb6")) +
+  ggtitle("Demographic distribution per Generation")
+  # botton
+p1
+
+```
+
+## Australian population by country of birth by state
+
+```{r plot3 table 1, echo=FALSE}
+Data_3 <- read.csv("Table_1.csv")
+Data_3 <- Data_3[-10]
+Data_3
+
+colnames(Data_3) <- c("Country","New South Wales","Victoria","Queensland","South Australia","Western Australia","Tasmania",
+                      "Northern Territory","Australian Capital Territory")
+Data_3
+Long_Data3 <- pivot_longer(Data_3, names_to = "State", c("New South Wales","Victoria","Queensland",
+                                                         "South Australia","Western Australia","Tasmania",
+                                                         "Northern Territory","Australian Capital Territory"),
+                           values_to = "Population")
+
+Long_Data3 <- Long_Data3 %>%mutate(Pop_per_1000 = Population/1000)
+
+
+Australia_shape <-readOGR("STE_2021_AUST_GDA2020/STE_2021_AUST_GDA2020.shp")
+
+Australia_shape_frame <- tidy(Australia_shape,region = "STE_NAME21")
+
+
+
+#Tidy to merge
+Long_Data3 <- Long_Data3%>%mutate(id = State)
+
+merge_data_3 <- left_join(Australia_shape_frame, Long_Data3, by ="id")
+merge_data_3_ordered<-merge_data_3[order(merge_data_3$order), ] 
+
+
+ggplot(data = merge_data_3_ordered,
+       aes(x = long, y = lat, group = group,fill = Pop_per_1000)) +
+  geom_polygon(color = "black", size = 0.25) + 
+  coord_map() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank()) +
+  scale_fill_distiller(name = "Population \n per 1,000",
+                        guide = "legend",
+                    palette = "Blues", direction = 1) 
+
+```
+

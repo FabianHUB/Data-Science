@@ -1,0 +1,856 @@
+---
+title: "Assignment 2"
+author: "Fabian Caballero"
+date: "06/04/2022"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+student id: s3912233
+---
+## **Set up**
+-- (DESCRIPTION OF STEPS) --
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tseries)
+library(dplyr)
+library(TSA)
+library(lmtest)
+library(tidyr)
+library(forecast)
+library(data.table)
+library(rugarch)
+
+residual.analysis <- function(model, std = TRUE,start = 2, class = c("ARIMA","GARCH","ARMA-GARCH", "garch", "fGARCH")[1]){
+  # If you have an output from arima() function use class = "ARIMA"
+  # If you have an output from garch() function use class = "GARCH". 
+  # If you have an output from garchFit() function use class = "fGARCH" - added by HD - 5/5/21 
+  # If you have an output from garch() function from tseries package use class = "garch" - added by HD - 20/5/21 
+  # Please note that you should use tseries package to be able to run this function for GARCH models.
+  # If you have an output from ugarchfit() function use class = "ARMA-GARCH"
+  library(TSA)
+
+  if (class == "ARIMA"){
+    if (std == TRUE){
+      res.model = rstandard(model)
+    }else{
+      res.model = residuals(model)
+    }
+  }else if (class == "GARCH"){
+    res.model = model$residuals[start:model$n.used]
+  }else if (class == "garch"){
+    res.model = model$residuals[start:model$n.used]  
+  }else if (class == "ARMA-GARCH"){
+    res.model = model@fit$residuals
+  }else if (class == "fGARCH"){
+    res.model = model@residuals
+  }else {
+    stop("The argument 'class' must be either 'ARIMA' or 'GARCH' ")
+  }
+  par(mfrow=c(2,2))
+  plot(res.model,type='o',ylab='Standardised residuals', main="Time series plot of standardised residuals")
+  abline(h=0)
+  hist(res.model,main="Histogram of standardised residuals")
+  qqnorm(res.model,main="QQ plot of standardised residuals")
+  qqline(res.model, col = 2)
+  acf(res.model,main="ACF of standardised residuals")
+  print(shapiro.test(res.model))
+  k=0
+  tsdiag(model)
+  par(mfrow=c(1,1))
+}
+
+sort.score <- function(x, score = c("bic", "aic")){
+  if (score == "aic"){
+    x[with(x, order(AIC)),]
+ }else if (score == "bic") {
+    x[with(x, order(BIC)),]
+ }else {
+    warning('score = "x" only accepts valid arguments ("aic","bic")')
+ }
+}
+arima_modelling <- function(X, arima_list, sarima_list = c(0,0,0), freq = 1, method = "THREE"){ # Data = Time series, list(arima_list) ARIMA models list
+  library(lmtest)
+  library(forecast)
+  for (i in 1:length(arima_list)){
+    
+    if (method == "THREE"){
+    print(paste("Model_",arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3])) # Print model to analyse
+    
+    print(coeftest(arima(X,
+                         order = c(arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3]),
+                         seasonal =list(order = sarima_list, 
+                                        period = freq), 
+                         method = "ML"))) #Print coefficient test for each model
+
+    
+    print(paste("Model_CSS",arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3])) # Print model to analyse
+    
+    print(coeftest(arima(X,
+                         order = c(arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3]),
+                         seasonal =list(order = sarima_list, 
+                                        period = freq), 
+                         method = "CSS"))) #Print coefficient test for each model
+  
+
+    print(paste("Model_CSS_ML",arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3])) # Print model to analyse
+    
+    print(coeftest(arima(X,
+                         order = c(arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3]),
+                         seasonal =list(order = sarima_list, 
+                                        period = freq), 
+                         method = "CSS-ML"))) #Print coefficient test for each model
+    }
+    if (method == "ML"){
+      print(paste("Model_",arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3])) # Print model to analyse
+      
+      print(coeftest(arima(X,
+                           order = c(arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3]),
+                           seasonal =list(order = sarima_list, 
+                                          period = freq), 
+                           method = "ML"))) #Print coefficient test for each model
+      }
+    if (method == "CSS"){
+      print(paste("Model_CSS",arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3])) # Print model to analyse
+      
+      print(coeftest(arima(X,
+                           order = c(arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3]),
+                           seasonal =list(order = sarima_list, 
+                                          period = freq), 
+                           method = "CSS"))) #Print coefficient test for each model
+    }
+    if (method == "CSS-ML"){
+      print(paste("Model_CSS_ML",arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3])) # Print model to analyse
+      
+      print(coeftest(arima(X,
+                           order = c(arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3]),
+                           seasonal =list(order = sarima_list, 
+                                          period = freq), 
+                           method = "CSS-ML")))
+    }
+    if (method == "ARIMA"){
+      print(paste("Model_CSS_ML",arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3])) # Print model to analyse
+      
+      print(coeftest(Arima(X,
+                           order = c(arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3]))))
+      
+    }
+  }
+}
+
+SummaryResiduals <- function(data,model){
+  Res_model=rstudent(model)
+  Shapiro<-shapiro.test(Res_model)
+  par(mfrow=c(2,2))
+  plot(as.vector(time(data)),Res_model, type="l",
+       ylab="Standarised residual values",
+       xlab="Period of time",
+       main="Time series plot of model residuals")
+  hist(Res_model,
+       xlab = "Standarised residuals",
+       main = "Histogram of standarised model residuals")
+  qqnorm(Res_model,
+         main = "QQplot of model residuals ")
+  qqline(Res_model,col="red")
+  acf(Res_model,
+      main = "ACF of model residuals")
+  par(mfrow=c(1,1))
+  Shapiro
+} # Analysis of residuals trends
+
+box_cox_analysis <- function(X, 
+                             title = "Time series plot (TRANSFORMED)", 
+                             ylab="Values", 
+                             xlab="Period",
+                             title2 = "QQplot of Time series (TRANSFORMED)"){
+  library(tseries)
+  library(TSA)
+  box_cox = BoxCox.ar(X)
+  lambda <- box_cox$lambda[which(max(box_cox$loglike) == box_cox$loglike)]
+  box_cox = (X^lambda-1)/lambda
+  plot(box_cox,
+       main = title,
+       ylab = ylab,
+       xlab = xlab,
+       line = 0.6,
+       type = 'o',
+       lwd = 1)
+  
+  qqnorm(y=box_cox, 
+         main = title2, line=0.6, lwd = 1, pch=19)
+  qqline(y=box_cox, col = 2, lwd = 2, lty = 2) # tails are quite off from both ends
+  print(shapiro.test(box_cox))
+  
+  y = box_cox             
+  x = zlag(box_cox)       # Generate first lag 
+  index = 2:length(x)    # Create an index to get rid of the first NA value in x
+  print(adf.test(X))
+  print(pp.test(X))
+
+  
+  print(paste("CORRELATION = ",cor(y[index],x[index]))) 
+  print(paste("LAMBDA =",lambda))
+}
+
+
+```
+
+ **Data**
+ -- (DESCRIPTION OF STEPS) --
+
+
+```{r Data}
+Monthly_rainfall = read.csv(file.choose(), header=TRUE)
+Monthly_rainfall# check the data
+
+
+# Reshaping the data-frame to long format
+Monthly_rainfall.long <- pivot_longer(Monthly_rainfall, cols=2:13, names_to = "Month", values_to = "Rainfall")
+head(Monthly_rainfall.long,n=15)
+
+summary(Monthly_rainfall.long)
+
+# change character data type into numeric for rainfall column
+Monthly_rainfall.long$Rainfall <- as.numeric(Monthly_rainfall.long$Rainfall)  
+head(Monthly_rainfall.long,n=15)
+tail(Monthly_rainfall.long,n=15)
+
+
+#-------------------------------
+# Imputing Median per Month for missing values
+
+# transform a data frame into a data.table to imputation 
+setDT(Monthly_rainfall.long)
+
+Monthly_rainfall.long <- Monthly_rainfall.long[, Rainfall := ifelse(is.na(Rainfall), 
+                            median(Rainfall, na.rm = TRUE), 
+                            Rainfall), 
+                        by = Month]
+
+
+#check values
+head(Monthly_rainfall.long,n=15)
+
+Monthly_rainfall.long
+
+## Year 1994-1998 data is missing , therefore we will continue with data after 1999 and before 2022
+RF_after_1999 <- Monthly_rainfall.long %>% 
+                dplyr::filter(Year > 1998 & Year  < 2022)
+railfall_TS= ts(RF_after_1999$Rainfall,start=1999, frequency = 12)
+```
+
+**Descriptive Analytics**
+-- (DESCRIPTION OF STEPS) --
+```{r Descriptive Analytics, echo=FALSE}
+summary(railfall_TS) 
+IQR(railfall_TS)
+hist(railfall_TS, main = "Rainfall of Melbourne Botanical Gardens")
+```
+
+
+*Time series plot*
+-- (DESCRIPTION OF STEPS) --
+```{r Time series plot, echo=FALSE}
+
+
+#Time-series plot
+
+# par(mar=c(5,4,4,2),cex.main=0.8, cex.lab=0.7, cex.axis=0.7)
+
+p1=plot(railfall_TS
+        , ylab="Monthly rainfall of Melbourne Botanical Gardens"
+        , xlab="Year"
+        , main="Monthly rainfall of Melbourne Botanical Gardens"
+        , col='blue'
+        , line=0.6
+        , lwd = 1, pch=19
+        , type='o')
+
+```
+
+* *Trends* : -- (DESCRIPTION OF RESULTS) --
+
+* *Seasonality* : -- (DESCRIPTION OF RESULTS) --
+
+* *Changing variances* : -- (DESCRIPTION OF RESULTS) --
+
+* *Behavior* :  -- (DESCRIPTION OF RESULTS) --
+
+* *Intervention* : -- (DESCRIPTION OF RESULTS) --
+
+*Correlation analysis*
+-- (DESCRIPTION OF STEPS) --
+
+$$ \rho = 0.1710105$$
+
+```{r}
+
+# Scatter plot of the relationship between pairs of consecutive rainfall values
+plot(y=railfall_TS
+     ,x=zlag(railfall_TS)
+     ,ylab='rainfall'
+     , xlab='Previous day rainfall' 
+     , main = "Scatter plot of rainfall in consecutive days"
+     ,line=0.5
+     , xlim = c(20, 100))
+
+
+y = railfall_TS             
+x = zlag(railfall_TS)       # Generate first lag 
+index = 2:length(x)    # Create an index to get rid of the first NA value in x
+cor(y[index],x[index]) 
+```
+
+
+**Testing the data**
+
+*Normality*
+* It is important to mention that all tests in this report were applied using a level of significance of 5% to keep consistency in the results and analysis.
+
+$$\alpha = 0.05$$
+
+```{r Tests2, echo=FALSE}
+qqnorm(y=railfall_TS  , main = "QQ plot of rainfall series", line=0.6, lwd = 1, pch=19)
+qqline(y=railfall_TS  , col = 2, lwd = 2, lty = 2) # tails are quite off from both ends
+shapiro.test(railfall_TS )
+
+```
+
+
+*Stationary*
+-- (DESCRIPTION OF STEPS) --
+
+```{r stationary test(raw), echo=FALSE}
+#NO STATIONARY p value greater than alpha
+
+acf(railfall_TS, main = "ACF plot of rainfall series")
+pacf(railfall_TS, main = "PACF plot of rainfall series")
+
+
+# ACF - just one lag is above confidence boundary
+# PACF - just one lag is above confidence boundary
+
+adf.test(railfall_TS) # p-value = 0.01 (< 0.05 stationary)
+pp.test(railfall_TS) # p-value = 0.01 (< 0.05 stationary)
+```
+
+* *Augmented Dickey-Fuller Test* : -- (DESCRIPTION OF RESULTS) --
+
+* *Phillips-Perron Unit Root Test* : -- (DESCRIPTION OF RESULTS) --
+
+*Seasonality*
+
+For the periodic nature of the collection data, the first approach to understand the seasonality of the data is illustrating the time series plot with values labelled with the period of collection. Additionally, the Auto correlation plots will help to analyse the level of seasonality in the data.
+
+```{r seasonality}
+# par(mar=c(5,4,4,2),cex.main=0.8, cex.lab=0.7, cex.axis=0.7)
+
+p1=plot(railfall_TS
+        , ylab="Monthly rainfall of Melbourne Botanical Gardens"
+        , xlab="Year"
+        , main="Monthly rainfall of Melbourne Botanical Gardens"
+        , col='blue'
+        , line=0.6
+        , lwd = 1) #pch=19
+#, type='o')
+points(y=railfall_TS,x=time(railfall_TS), pch=as.vector(season(railfall_TS)), col = "black",lwd = 1.5, cex = 0.9)
+
+par(mfrow =c(1,2))
+acf(railfall_TS,lag.max = 60, main = "ACF plot of rainfall series")
+pacf(railfall_TS,lag.max = 60,main = "PACF plot of rainfall series")
+par(mfrow =c(1,1))
+```
+As a result, months do not show a repetitive pattern during the years of analysis and ACF plot does not present any strong wave-pattern between within the lags.
+
+**MODELS PROPOSED**
+
+*TREND MODELS*
+
+- Linear Model
+-- (DESCRIPTION OF STEPS) --
+```{r Linear M}
+railfall_TS_lm = lm(railfall_TS ~ time(railfall_TS)) # label the linear trend model as model1
+summary(railfall_TS_lm)
+
+plot(railfall_TS,type='o',ylab='y', main = "Fitted linear model: Monthly rainfall series",line=0.5)
+abline(railfall_TS_lm, col = 'red', lty=2) # add the fitted least squares line from model1
+
+legend("bottomleft",lty=1, bty = "n" ,text.width = 8, col=c("black","red"), 
+       c("Monthly rainfall(mm)", "Fitted linear model"),cex=0.6)
+
+SummaryResiduals(railfall_TS,railfall_TS_lm)
+```
+- Quadratic Model (2nd Order)
+```{r Quadratic}
+t = time(railfall_TS)
+t2 = t^2
+railfall_TS_q2 = lm(railfall_TS~t+t2) 
+summary(railfall_TS_q2)
+
+plot(ts(fitted(railfall_TS_q2)), ylim = c(min(c(fitted(railfall_TS_q2), as.vector(railfall_TS))), max(c(fitted(railfall_TS_q2),as.vector(railfall_TS)))),
+     ylab='y' , main = "Fitted quadratic model of order 2: Monthly rainfall series", type="l",lty=2,col="red",line=0.5)
+lines(as.vector(railfall_TS),type="o")
+legend("bottomleft",lty=1, bty = "n" ,text.width = 8, col=c("black","red"), 
+       c("Monthly rainfall(mm)", "Fitted Quadratic Model of order 2"),cex=0.6)
+
+SummaryResiduals(railfall_TS,railfall_TS_q2)
+```
+
+- Quadratic Model (3rd Order)
+```{r Quadratic 3rd}
+t = time(railfall_TS)
+t3 = t^3
+railfall_TS_q3 = lm(railfall_TS~t+t3) 
+summary(railfall_TS_q3)
+
+plot(ts(fitted(railfall_TS_q3)), ylim = c(min(c(fitted(railfall_TS_q3), as.vector(railfall_TS))), max(c(fitted(railfall_TS_q3),as.vector(railfall_TS)))),
+     ylab='y' , main = "Fitted quadratic model of order 3: Monthly rainfall series", type="l",lty=2,col="red",line=0.5)
+lines(as.vector(railfall_TS),type="o")
+legend("bottomleft",lty=1, bty = "n" ,text.width = 8, col=c("black","red"), 
+       c("Monthly rainfall(mm)", "Fitted Quadratic Model of order 3"),cex=0.6)
+
+SummaryResiduals(railfall_TS,railfall_TS_q3)
+
+```
+
+- Seasonal Model
+-- (DESCRIPTION OF STEPS) --
+```{r S1}
+month.=season(railfall_TS)
+model1=lm(railfall_TS~month.-1)
+summary(model1)
+
+SummaryResiduals(railfall_TS,model1)
+```
+-- (DESCRIPTION OF STEPS) --
+```{r S1plot}
+plot(ts(fitted(model1)), ylab='y',main="Fitted seasonal model to monthly rainfall time series",
+     ylim=c(min(c(fitted(model1),as.vector(railfall_TS))),
+            max(c(fitted(model1), as.vector(railfall_TS)))),col="red")
+lines(as.vector(railfall_TS),type="o")
+```
+
+- Seasonal model with intercept
+-- (DESCRIPTION OF STEPS) --
+```{r S1.1}
+model1.1=lm(railfall_TS~month.)
+summary(model1.1)
+SummaryResiduals(railfall_TS,model1.1)
+```
+-- (DESCRIPTION OF STEPS) --
+```{r S1.1plot}
+plot(ts(fitted(model1.1)), ylab='y',main="Fitted seasonal model to monthly rainfall time series",
+     ylim=c(min(c(fitted(model1.1),as.vector(railfall_TS))),
+            max(c(fitted(model1.1), as.vector(railfall_TS)))),col="red")
+lines(as.vector(railfall_TS),type="o")
+```
+
+- Cosine model
+-- (DESCRIPTION OF STEPS) --
+```{r cos}
+har. <- harmonic(railfall_TS,1)
+data<- data.frame(railfall_TS,har.)
+model2 <- lm(railfall_TS~cos.2.pi.t.+sin.2.pi.t.,data=data)
+summary(model2)
+
+SummaryResiduals(railfall_TS,model2)
+```
+-- (DESCRIPTION OF STEPS) --
+```{r cosplot}
+plot(ts(fitted(model2)),ylab='y',main="Fitted cosine wave to monthly rainfall time series.",
+     ylim=c(min(c(fitted(model2),as.vector(railfall_TS))),
+            max(c(fitted(model2), as.vector(railfall_TS)))
+     ), col="green" )
+lines(as.vector(railfall_TS),type="o")
+```
+
+
+- SARIMA Models
+Based on the analysis of seasonality and the previous results from the cosine and seasonal model, SARIMA cannot provide suitable models for the current data.
+```{r SARIMA}
+```
+
+- ARIMA models
+Based on the MA behavior of the data ARIMA models could offer suitable models for Melbourne Rainfall data. In order to apply this frequency is dropped from the time series  object.
+```{r TS}
+railfall_TS_2= ts(RF_after_1999$Rainfall)
+```
+
+*Transformation*
+Transformation will help to improve normality within the data because the raw time series reject the NULL hypothesis of the Shapiro-wilk test that assess normality.
+
+To evaluate the transformation the function  box_cox_analysis() is applied.
+
+```{r Boxcox, echo=FALSE}
+
+box_cox_analysis(railfall_TS_2,
+                 title = "Monthly rainfall of Melbourne Botanical Gardens (TR)",
+                 ylab = "Monthly rainfall in (mm)",
+                 xlab="Year",
+                 title2 = "QQ plot of rainfall series (TR)")
+
+railfall_TS_2_BC = (railfall_TS_2^(0.4)-1)/(0.4)
+
+```
+$$ \lambda = 0.4$$
+$$ P-value = 0.36$$
+The tails of the QQplot are thinner and the P-value = $0.36$ is greater than $\alpha = 0.05$. Therefore normality is improved by applying transformation with $\lambda = 0.4$.Stationarity was not affected by this transformation.
+$$ \rho = 0.15735$$
+The correlation was not significantly affected by this transformation.
+
+*Difference* 
+It is possible to apply difference between the values to observe if the behavior of the data could slight improved compare to the transformation. However, the time series plot does not show any significant improvement that could suggest that a difference will get better ARIMA models.
+
+```{r Differencing I, echo=FALSE}
+railfall_TS_2_BC_DFF1 <- diff(railfall_TS_2_BC) 
+plot(railfall_TS_2_BC_DFF1
+        , ylab="Monthly rainfall in mm"
+        , xlab="Year"
+        , main="Monthly rainfall of Melbourne Botanical  Gardens  (TR)(DFF)"
+        , col='dark blue'
+        , line=0.6
+        , lwd = 1, pch=19
+        , type='o')
+  
+```
+
+
+*ACF PACF SPECIFICATIONS*
+The auto correlation plots illustrate just a significant lag for ACF and PACF. Therefore, the possible models from this specification are ARIMA {1,0,1} {0,0,1} {1,0,0}
+```{r ACF-PACF, echo=FALSE}
+par(mfrow=c(1,2))
+acf(railfall_TS_2_BC, main = "ACF plot of rainfall series (TR)")
+pacf(railfall_TS_2_BC, main = "PACF plot of rainfall series (TR)")
+par(mfrow=c(1,1))
+
+```
+*EACF*
+Following the top left "o" the Extended Autocorrelation matrix suggest the following models : ARIMA {0,0,1} {0,0,2} {1,0,1} {1,0,2}. This specification shares a few models from the ACF and PACF graphs.
+```{r EACF, echo=FALSE}
+
+EACF <- eacf(railfall_TS_2_BC)
+
+```
+
+*BIC*
+Based on the max AR and MA from the eacf(), BIC will run with the same parameters to keep consistency in the analysis. The resulting graph suggest ARIMA {1,0,0} as the strongest model in the first row and ARIMA {1,0,4} and {1,0,3} from the the second and third line.
+
+
+```{r Differencing, echo=FALSE}
+plot(armasubsets(y = railfall_TS_2_BC, nar = 8, nma = 14, y.name = "AR()", ar.method = "ols"))
+
+```
+*MODELS PROPOSED*
+
+As a result, the following models are proposed to evaluate the quality of the model:
+
+ARIMA {1,0,1} {0,0,1} {1,0,0} {0,0,2} {1,0,2} {1,0,3} {1,0,4}
+
+The function arima_modelling() will help to analyse the coefficients for each proposed model. Additionally, a for loop is applied in order to create and assign variables for future steps. 
+```{r models}
+arima_list <- list(c(1,0,1),c(0,0,1),c(1,0,0),c(0,0,2),
+                   c(1,0,2),c(1,0,3),c(1,0,4))
+
+arima_modelling(X = (railfall_TS_2^(0.4)-1)/(0.4),
+                arima_list = arima_list)
+
+for (i in 1:length(arima_list)){
+  assign(paste0('model_',arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3]),
+       arima(railfall_TS,
+             order = c(arima_list[[i]][1],arima_list[[i]][2],arima_list[[i]][3]),
+             method = "ML"))
+}
+
+
+```
+The coefficients give a result indicating that increment of moving average over one is not suggested to identify the fittest model. Therefore, the models with significant coefficients are : 
+ARIMA {1,0,0} {0,0,2} However, it is important to identify which models are the best model based on AIC and BIC results. For this reason, sort.score() is used to organized the models.
+
+```{r sort}
+sort.score(AIC(model_001, model_002, model_100, model_101, model_102, model_103, model_104),
+           score = "aic")
+
+sort.score(BIC(model_001, model_002, model_100, model_101, model_102, model_103, model_104),
+           score = "bic")
+```
+The results suggested that model_101 is better based on AIC and model_100 based on 100. However, it is important to highlight model_101 did not show good results using Maximun Likehood method. 
+
+* Diagnostic of models :
+
+The diagnostic tools will provide deep information about the final candidates models {1,0,1} and {1,0,0}
+
+Analysis of residuals :
+Both residuals has similar results. Therefore, we should apply over fitting to both models to perceive any improvements
+```{r residuals analysis}
+
+Model__100<-Arima(y = (railfall_TS_2^(0.4)-1)/(0.4),order = c(1,0,0))
+Model__101<-Arima(y = (railfall_TS_2^(0.4)-1)/(0.4),order = c(1,0,1))
+residual.analysis(model = Model__100)
+
+residual.analysis(model = Model__101)
+
+```
+
+These are the possible overfitting :
+
+ARIMA MODEL_100 {2,0,0} {1,0,1}
+ARIMA MODEL_101 {2,0,1} {1,0,2}
+
+From this model {1,0,1} is already one of the candidates to best model and {1,0,2} was already analysed with negative results in the coefficients. Then, it is important to analyse the two new models.
+
+```{r overfitting}
+arima_list2 <- list(c(1,0,0),c(1,0,1),c(2,0,0),c(2,0,1))
+
+arima_modelling(X = (railfall_TS_2^(0.4)-1)/(0.4),
+                arima_list = arima_list2,method = "ARIMA")
+
+for (i in 1:length(arima_list2)){
+  assign(paste0('Model__',arima_list2[[i]][1],arima_list2[[i]][2],arima_list2[[i]][3]),
+       arima(railfall_TS,
+             order = c(arima_list2[[i]][1],arima_list2[[i]][2],arima_list2[[i]][3])))
+}
+
+```
+
+* Selected Model :
+The over fitted models did not show any improvement for their coefficients, at least one coefficient was not significant. As a result, a considering previous analysis of the ARIMA model. 
+The best candidate is the model ARIMA {1,0,0}. However in the analysis of residuals we can perceived that the volatility of the variance still there. For this reason, GARCH and ARCH model will provide another view reducing the variance in the model.
+
+*GARCH / ARCH*
+# We need to have this stationary series to test for the existence of ARCH effect or volatility clustering.
+# To achieve this, we define return series for a time series
+Similarly, the frequency is dropped to create the time series for this model.
+(DESCRIPTION)
+```{r GARCH}
+r.rainfall=diff(log(railfall_TS))*100
+par(mfrow=c(1,1))
+plot(r.rainfall,ylab='Monthly rainfall of Melbourne Botanical Gardens',
+     main = "Monthly rainfall of Melbourne Botanical Gardens")
+
+```
+# In the return series, the volatility is obvious and there is no sense of trend or seasonality.
+
+```{r TEST GARCH}
+adf.test(r.rainfall)# 0.01 The stationarity of return series is confirmed by the ADF test.
+
+qqnorm(r.rainfall,main="Q-Q Normal Plot of Rainfall Returns.")
+qqline(r.rainfall)
+shapiro.test(r.rainfall)
+
+par(mfrow=c(1,2))
+acf(r.rainfall, main="ACF plot for return series.")
+pacf(r.rainfall, main="PACF plot for return series.")
+
+
+
+
+par(mfrow=c(1,1))
+McLeod.Li.test(y=r.rainfall,main="McLeod-Li test statistics for rainfall series")
+
+```
+# McLeod-Li test indicates volatility clustering in this series. 
+# So, we need to capture both trend and changing variance by applying an ARMA + GARCH
+
+# We will first specify the orders of ARMA part. 
+# Then we will use the residuals of ARMA part to specify the orders of GARCH part.
+
+# according to ACF and PACF
+# p=4 q=1
+# {ARMA (4,1)}
+
+```{r GARCH eacf}
+eacf(r.rainfall)
+
+```
+# p= 0,1 q=1,2
+# {ARMA (0,1),ARMA (0,2),ARMA (1,1),ARMA (1,2)}
+
+```{r BIC}
+plot(armasubsets(y=r.rainfall,nar=8,nma=8,y.name='p',ar.method='ols'))
+
+```
+# p=1,2  q=3
+#{ARMA (1,3),ARMA (2,3)}
+
+# all models 
+# {ARMA (4,1),ARMA (0,1),ARMA (0,2),ARMA (1,1),ARMA (1,2),ARMA (1,3),ARMA (2,3)}
+```{r Diagnostic}
+arima_list_GARCH <-list(c(4,0,1),c(0,0,1),c(0,0,2),c(1,0,1),c(1,0,2),c(1,0,3),c(2,0,3))
+
+arima_modelling(X = r.rainfall,
+                arima_list = arima_list_GARCH,method = "ML")
+
+for (i in 1:length(arima_list_GARCH)){
+  assign(paste0('G_model_',arima_list_GARCH[[i]][1],arima_list_GARCH[[i]][2],arima_list_GARCH[[i]][3]),
+       arima(r.rainfall,
+             order = c(arima_list_GARCH[[i]][1],arima_list_GARCH[[i]][2],arima_list_GARCH[[i]][3]),
+             method = "ML"))
+}
+
+residual.analysis(model = G_model_401, std = TRUE,start = 2, class = "ARIMA")
+residual.analysis(model = G_model_001, std = TRUE,start = 2, class = "ARIMA")
+residual.analysis(model = G_model_002, std = TRUE,start = 2, class = "ARIMA")
+residual.analysis(model = G_model_101, std = TRUE,start = 2, class = "ARIMA")
+residual.analysis(model = G_model_102, std = TRUE,start = 2, class = "ARIMA")
+residual.analysis(model = G_model_103, std = TRUE,start = 2, class = "ARIMA")
+residual.analysis(model = G_model_203, std = TRUE,start = 2, class = "ARIMA")
+```
+```{r sort2}
+
+sort.score(AIC(G_model_401,G_model_001,G_model_002,
+               G_model_101,G_model_102,G_model_103,G_model_203), score = "aic")
+
+
+
+sort.score(BIC(G_model_401,G_model_001,G_model_002,
+               G_model_101,G_model_102,G_model_103,G_model_203), score = "bic")
+
+```
+# lowest AIC - model_101, second lowest - model_102
+# lowest BIC - model_001 second lowest - model_101
+
+# ARMA(1,1) fitted to the rainfall return series is the best model in terms of
+# parameter significance and diagnostics
+
+```{r GARCH plot}
+
+# 
+plot(G_model_101,type='o',ylab='Standardised residuals', main="Time series plot of standardised residuals ARMA (1,1)")
+
+```
+```{r ABS}
+abs.r.res.Rainfall = abs(rstandard(G_model_101))
+par(mfrow=c(1,2))
+acf(abs.r.res.Rainfall, main="ACF plot for absolute return series.")
+pacf(abs.r.res.Rainfall, main="PACF plot for absolute return series.")
+eacf(abs.r.res.Rainfall)
+par(mfrow=c(1,1))
+```
+from ACF and PACF : max(p,q)=1
+
+#GARCH (0,1) (1,1)
+
+EACF     does not show possible models 
+
+```{r SQRT}
+sq.r.res.Rainfall= rstandard(G_model_101)^2
+par(mfrow=c(1,2))
+acf(sq.r.res.Rainfall, main="ACF plot for squared return series.")
+pacf(sq.r.res.Rainfall, main="PACF plot for squared return series.")
+par(mfrow=c(1,1))
+
+eacf(sq.r.res.Rainfall)
+```
+NO MODELS found it 
+
+*ARIMA + GARCH* (1,1)
+```{r ARIMA + GARCH}
+model_101_01 <- fGarch::garchFit(~ arma(1,1)+garch(1,0),
+                                 data = r.rainfall, trace=F)
+
+model_101_11 <- fGarch::garchFit(~ arma(1,1)+garch(1,1),
+                                 data = r.rainfall, trace=F)
+# residual.analysis(model = model_101_01, std = TRUE,start = 2, class = "fGARCH")
+# residual.analysis(model = model_101_11, std = TRUE,start = 2, class = "fGARCH")
+
+df <- data.frame(AIC = c(model_101_01@fit$ics[1],model_101_11@fit$ics[1]),
+                 BIC = c(model_101_01@fit$ics[2],model_101_11@fit$ics[2]))
+rownames(df) <- c("ARMA(1,1)+GARCH(0,1)","ARMA(1,1)+GARCH(1,1)")
+df
+
+```
+# ARMA(1,1)+GARCH(0,1) can be taken as the best model for forecasting.
+
+```{r ugarchspec}
+spec <- ugarchspec(variance.model = list(model = "sGARCH",
+                                         garchOrder = c(0, 1)
+),
+mean.model = list(armaOrder = c(1, 1)))
+model_101_11_2 <- ugarchfit(spec = spec, data = r.rainfall,
+                            solver = "hybrid",
+                            solver.control = list(trace=0))
+
+residual.analysis(model = model_101_11_2, class = "ARMA-GARCH")
+plot(model_101_11_2,which = 1)
+plot(model_101_11_2,which = 3)
+```
+
+*FORECASTING ARMA+GARCH*
+```{r FORECASTING}
+forc = ugarchforecast(model_101_11_2,n.ahead=10,data=r.rainfall)
+forc
+
+Rainfall.positive = railfall_TS + min(abs(railfall_TS))+0.1
+
+firstObs <- matrix(c(log(Rainfall.positive)[1]),1)
+log.rainfall.diff1.back = diffinv(r.rainfall, xi = firstObs)
+log.rainfall.diff1.back = exp(log.rainfall.diff1.back)
+log.rainfall.diff1.back.original = log.rainfall.diff1.back - (min(abs(railfall_TS))+0.1)
+log.rainfall.diff1.back.original - railfall_TS # Make sure you are doing it correctly!
+
+frc <- forc@forecast$seriesFor
+lastObs <- matrix(c(log(Rainfall.positive)[276]),1)
+log.rainfall.diff1.back = diffinv(frc, xi = lastObs)
+log.rainfall.diff1.back.frc = log.rainfall.diff1.back - (min(abs(railfall_TS))+0.1)
+
+plot(railfall_TS, xlim= c(1999, 2022.83), ylim = c(min(railfall_TS),
+                                               max(railfall_TS)), 
+     ylab = "Rainfall (mm)",
+     main = "Forecasts from ARMA+GARCH model.")
+lines(ts(as.vector(log.rainfall.diff1.back.frc), start = c(2022),frequency = 12), col="blue", type="l")
+legend("topleft", lty=1, pch=1, col=c("black","blue"), text.width = 18,
+       c("Data", "Forecasts"))
+
+
+
+```
+
+*ARIMA + GARCH* (,1)
+
+```{r ugarchspec}
+spec <- ugarchspec(variance.model = list(model = "sGARCH",
+                                         garchOrder = c(1, 1)
+),
+mean.model = list(armaOrder = c(1, 1)))
+model_101_11_3 <- ugarchfit(spec = spec, data = r.rainfall,
+                            solver = "hybrid",
+                            solver.control = list(trace=0))
+
+residual.analysis(model = model_101_11_3, class = "ARMA-GARCH")
+plot(model_101_11_3,which = 1)
+plot(model_101_11_3,which = 3)
+```
+
+*FORECASTING ARMA+GARCH*
+```{r FORECASTING, include=FALSE}
+forc = ugarchforecast(model_101_11_3,n.ahead=10,data=r.rainfall)
+forc
+
+Rainfall.positive = railfall_TS + min(abs(railfall_TS))+0.1
+# waveReturn = diff(log(wave.positive))
+# Take them back
+# for raw series
+firstObs <- matrix(c(log(Rainfall.positive)[1]),1)
+log.rainfall.diff1.back = diffinv(r.rainfall, xi = firstObs)
+log.rainfall.diff1.back = exp(log.rainfall.diff1.back)
+log.rainfall.diff1.back.original = log.rainfall.diff1.back - (min(abs(railfall_TS))+0.1)
+log.rainfall.diff1.back.original - railfall_TS # Make sure you are doing it correctly!
+
+frc <- forc@forecast$seriesFor
+lastObs <- matrix(c(log(Rainfall.positive)[276]),1)
+log.rainfall.diff1.back = diffinv(frc, xi = lastObs)
+# log.rainfall.diff1.back = exp(log.rainfall.diff1.back)
+log.rainfall.diff1.back.frc = log.rainfall.diff1.back - (min(abs(railfall_TS))+0.1)
+
+plot(railfall_TS, xlim= c(1999, 2022.83), ylim = c(min(railfall_TS),
+                                               max(railfall_TS)), 
+     ylab = "Rainfall (mm)",
+     main = "Forecasts from ARMA+GARCH model.")
+lines(ts(as.vector(log.rainfall.diff1.back.frc), start = c(2022),frequency = 12), col="blue", type="l")
+legend("topleft", lty=1, pch=1, col=c("black","blue"), text.width = 18,
+       c("Data", "Forecasts"))
+
+
+
+```
